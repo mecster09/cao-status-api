@@ -1,0 +1,25 @@
+services:
+  cao-status-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: cao-status-api
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      CAO_BASE_URL: "http://cao:9889"
+      CAO_TIMEOUT_MS: "5000"
+
+    expose:
+      - "3000"
+
+    networks:
+      - net_agent
+
+networks:
+  net_agent:
+    external: true
+    name: net_agent
