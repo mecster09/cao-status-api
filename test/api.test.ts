@@ -17,7 +17,7 @@ async function withServer(caoGet: (path: string) => Promise<unknown>, run: (base
 test("profile list omits prompt content while profile detail includes it", async () => {
   const caoGet = async (path: string) => path === "/agents/profiles"
     ? [{ name: "developer", description: "Builds software", content: "secret prompt" }]
-    : { name: "developer", description: "Builds software", content: "secret prompt" };
+    : { name: "developer", description: "Builds software", system_prompt: "secret prompt" };
 
   await withServer(caoGet, async (baseUrl) => {
     const list = await fetch(`${baseUrl}/api/cao/profiles`).then((response) => response.json());
@@ -55,6 +55,25 @@ test("dynamic workflow detail remains inspectable without a false graph", async 
     assert.equal(detail.kind, "dynamic");
     assert.equal(detail.visualizable, false);
     assert.deepEqual(detail.nodes, []);
+  });
+});
+
+test("Python workflow source produces best-effort visual steps", async () => {
+  const caoGet = async () => ({
+    name: "sdlc_common",
+    path: "sdlc_common.py",
+    source: [
+      "from cao_workflow import run_step",
+      "run_step(\"codex\", \"developer\", \"Implement the change\", step_id=\"implement\")",
+      "run_step(\"claude_code\", \"reviewer\", \"Review the change\", step_id=\"review\")"
+    ].join("\\n")
+  });
+
+  await withServer(caoGet, async (baseUrl) => {
+    const detail = await fetch(`${baseUrl}/api/cao/workflows/sdlc_common`).then((response) => response.json());
+    assert.equal(detail.visualizable, true);
+    assert.deepEqual(detail.nodes.map((node: any) => node.id), ["implement", "review"]);
+    assert.deepEqual(detail.edges, [{ from: "implement", to: "review" }]);
   });
 });
 

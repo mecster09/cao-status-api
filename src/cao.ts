@@ -22,6 +22,26 @@ function workflowSteps(value: any): any[] {
   return asArray(workflow, ["steps", "nodes", "workflow_steps"]);
 }
 
+function scriptSteps(source: unknown): any[] {
+  if (typeof source !== "string") return [];
+  const nodes: any[] = [];
+  const callPattern = /(?:run_step|step)\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = callPattern.exec(source))) {
+    const callEnd = source.indexOf(")", match.index);
+    const call = source.slice(match.index, callEnd === -1 ? source.length : callEnd);
+    const stepId = call.match(/step_id\s*=\s*["']([^"']+)["']/)?.[1];
+    nodes.push({
+      id: stepId ?? `step-${nodes.length + 1}`,
+      label: stepId ?? match[2],
+      kind: "agent-step",
+      profile: match[2],
+      provider: match[1]
+    });
+  }
+  return nodes;
+}
+
 export function workflowGraph(value: any): {
   nodes: any[];
   edges: any[];
@@ -36,10 +56,23 @@ export function workflowGraph(value: any): {
     return { nodes: explicitNodes, edges: explicitEdges ?? [], visualizable: true, kind: "graph" };
   }
 
-  const source = workflow?.source ?? workflow?.path ?? workflow?.filename;
+  // CAO ScriptSpec uses `path` for the Python filename and `source` for the
+  // script contents. Prefer the path when deciding whether this is dynamic
+  // Python; otherwise the contents will never end in `.py`.
+  const sourcePath = workflow?.path ?? workflow?.filename ?? workflow?.source;
   const type = String(workflow?.type ?? workflow?.kind ?? "").toLowerCase();
-  const isPython = type === "python" || String(source ?? "").endsWith(".py");
+  const isPython = type === "python" || String(sourcePath ?? "").endsWith(".py");
   const steps = workflowSteps(value);
+  const extractedScriptSteps = isPython ? scriptSteps(workflow?.source) : [];
+
+  if (extractedScriptSteps.length) {
+    return {
+      nodes: extractedScriptSteps,
+      edges: extractedScriptSteps.slice(1).map((node, index) => ({ from: extractedScriptSteps[index].id, to: node.id })),
+      visualizable: true,
+      kind: "dynamic"
+    };
+  }
 
   if (!steps.length && isPython) {
     return { nodes: [], edges: [], visualizable: false, kind: "dynamic" };
@@ -86,7 +119,7 @@ export function normaliseProfile(value: any): any {
     provider: profile?.provider,
     role: profile?.role,
     source: profile?.source,
-    content: profile?.content ?? profile?.body ?? profile?.prompt,
+    content: profile?.content ?? profile?.body ?? profile?.system_prompt ?? profile?.prompt,
     raw: value
   };
 }
