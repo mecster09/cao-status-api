@@ -19,6 +19,20 @@ services:
     networks:
       - net_agent
 
+  cao-status-app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+
+    container_name: cao-status-app
+    restart: unless-stopped
+
+    expose:
+      - "80"
+
+    networks:
+      - net_agent
+
 networks:
   net_agent:
     external: true
