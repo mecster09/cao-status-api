@@ -70,12 +70,24 @@ export function createApp(caoGet: CaoClient = defaultCaoGet): Express {
     try {
       const raw = await caoGet("/agents/profiles");
       const profiles = asArray(raw, ["profiles", "items", "results"]);
+      const summaries = profiles.map((profile) => {
+        const normalised = normaliseProfile(profile);
+        const { content: _content, raw: _raw, ...summary } = normalised;
+        return summary;
+      });
+
+      await Promise.all(summaries.map(async (summary: any) => {
+        if (summary.description || !summary.name) return;
+        try {
+          const detail = normaliseProfile(await caoGet(`/agents/profiles/${encodeURIComponent(summary.name)}`));
+          summary.description = detail.description;
+        } catch {
+          // A single unavailable profile must not make the read-only list fail.
+        }
+      }));
+
       res.json({
-        items: profiles.map((profile) => {
-          const normalised = normaliseProfile(profile);
-          const { content: _content, raw: _raw, ...summary } = normalised;
-          return summary;
-        }),
+        items: summaries,
         total: profiles.length
       });
     } catch (error) {

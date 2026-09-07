@@ -22,6 +22,13 @@ function workflowSteps(value: any): any[] {
   return asArray(workflow, ["steps", "nodes", "workflow_steps"]);
 }
 
+function descriptionFromContent(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const frontMatter = value.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  const description = frontMatter?.[1].match(/^description:\s*["']?(.+?)["']?\s*$/m)?.[1];
+  return description?.trim();
+}
+
 function splitArguments(argumentsText: string): string[] {
   const argumentsList: string[] = [];
   let start = 0;
@@ -113,6 +120,7 @@ export function workflowGraph(value: any): {
   edges: any[];
   visualizable: boolean;
   kind: "graph" | "dynamic" | "unknown";
+  reason?: string;
 } {
   const workflow = unwrapWorkflow(value);
   const explicitNodes = Array.isArray(workflow?.nodes) ? workflow.nodes : null;
@@ -141,6 +149,15 @@ export function workflowGraph(value: any): {
   }
 
   if (!steps.length && isPython) {
+    if (/^\s*def\s+agent_step\s*\(/m.test(String(workflow?.source ?? ""))) {
+      return {
+        nodes: [],
+        edges: [],
+        visualizable: false,
+        kind: "dynamic",
+        reason: "This Python file defines shared workflow helpers; it does not declare an executable workflow."
+      };
+    }
     return { nodes: [], edges: [], visualizable: false, kind: "dynamic" };
   }
   if (!steps.length) {
@@ -181,13 +198,14 @@ export function normaliseWorkflow(value: any): any {
 
 export function normaliseProfile(value: any): any {
   const profile = value?.profile ?? value;
+  const content = profile?.content ?? profile?.body ?? profile?.system_prompt ?? profile?.prompt;
   return {
     name: profile?.name ?? profile?.id,
-    description: profile?.description,
+    description: profile?.description ?? profile?.summary ?? descriptionFromContent(content),
     provider: profile?.provider,
     role: profile?.role,
     source: profile?.source,
-    content: profile?.content ?? profile?.body ?? profile?.system_prompt ?? profile?.prompt,
+    content,
     raw: value
   };
 }

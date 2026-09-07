@@ -28,6 +28,25 @@ test("profile list omits prompt content while profile detail includes it", async
   });
 });
 
+test("profile list enriches a missing description from profile front matter", async () => {
+  const caoGet = async (path: string) => path === "/agents/profiles"
+    ? [{ name: "change-publisher" }]
+    : {
+      name: "change-publisher",
+      system_prompt: [
+        "---",
+        "description: Publishes a user-approved worktree diff by committing, pushing and creating/updating the PR.",
+        "---",
+        "# Change Publisher"
+      ].join("\n")
+    };
+
+  await withServer(caoGet, async (baseUrl) => {
+    const list = await fetch(`${baseUrl}/api/cao/profiles`).then((response) => response.json());
+    assert.equal(list.items[0].description, "Publishes a user-approved worktree diff by committing, pushing and creating/updating the PR.");
+  });
+});
+
 test("workflow detail returns a visual graph for sequential steps", async () => {
   const caoGet = async (path: string) => path === "/workflows"
     ? [{ name: "review", steps: [
@@ -55,6 +74,24 @@ test("dynamic workflow detail remains inspectable without a false graph", async 
     assert.equal(detail.kind, "dynamic");
     assert.equal(detail.visualizable, false);
     assert.deepEqual(detail.nodes, []);
+  });
+});
+
+test("a Python helper module explains that it is not an executable workflow", async () => {
+  const caoGet = async () => ({
+    name: "sdlc_common",
+    path: "sdlc_common.py",
+    source: [
+      "from cao_workflow import run_step",
+      "def agent_step(profile, prompt, step_id, working_directory):",
+      "    return run_step(\"codex\", profile, prompt, step_id=step_id)"
+    ].join("\n")
+  });
+
+  await withServer(caoGet, async (baseUrl) => {
+    const detail = await fetch(`${baseUrl}/api/cao/workflows/sdlc_common`).then((response) => response.json());
+    assert.equal(detail.visualizable, false);
+    assert.equal(detail.reason, "This Python file defines shared workflow helpers; it does not declare an executable workflow.");
   });
 });
 

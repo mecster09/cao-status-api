@@ -34,5 +34,7 @@ h2 { margin: 0; font-size: 1.1rem; }
 .connector { color: #7dd3fc; font-size: 1.4rem; padding: 5px 0 5px 22px; }
 .fallback { margin-top: 28px; }
 .fallback h2 { margin-bottom: 8px; }
+.fallback details { margin-top: 18px; }
+.fallback summary { color: #7dd3fc; cursor: pointer; }
 .alert { color: #ffd1d1; background: #4a2026; border: 1px solid #9c3e4b; border-radius: 10px; padding: 12px 14px; margin: 18px 0; }
 @media (max-width: 720px) { .columns { grid-template-columns: 1fr; } .header { display: grid; gap: 8px; } }

@@ -30,6 +30,7 @@ export type Workflow = {
   edges: Array<{ from: string; to: string }>;
   visualizable: boolean;
   kind: "graph" | "dynamic" | "unknown";
+  reason?: string;
   raw?: unknown;
 };
 

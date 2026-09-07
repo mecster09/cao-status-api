@@ -41,7 +41,7 @@ export default function App() {
       {error && <div className="alert">{error}</div>}
       {view.type === "home" && <Home profiles={profiles} workflows={workflows} />}
       {view.type === "profile" && <ProfilePage name={view.name} onBack={() => navigate({ type: "home" })} />}
-      {view.type === "workflow" && <WorkflowPage name={view.name} onBack={() => navigate({ type: "home" })} />}
+      {view.type === "workflow" && <WorkflowPage name={view.name} profiles={profiles} onBack={() => navigate({ type: "home" })} />}
     </main>
   );
 }
@@ -69,17 +69,22 @@ function ProfilePage({ name, onBack }: { name: string; onBack: () => void }) {
   return <DetailLayout title={profile?.name ?? name} eyebrow="Agent profile" onBack={onBack} error={error}>{profile && <><p className="lead">{profile.description}</p><div className="metadata"><span>{profile.provider ?? "provider unknown"}</span><span>{profile.role ?? "role unknown"}</span><span>{profile.source ?? "source unknown"}</span></div><pre className="content">{profile.content ?? "This profile has no content field."}</pre></>}</DetailLayout>;
 }
 
-function WorkflowPage({ name, onBack }: { name: string; onBack: () => void }) {
+function WorkflowPage({ name, profiles, onBack }: { name: string; profiles: ProfileSummary[]; onBack: () => void }) {
   const [workflow, setWorkflow] = useState<Workflow>();
   const [error, setError] = useState<string>();
   useEffect(() => { api.workflow(name).then(setWorkflow).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load workflow")); }, [name]);
-  return <DetailLayout title={workflow?.name ?? name} eyebrow="Workflow definition" onBack={onBack} error={error}>{workflow && <><p className="lead">{workflow.description ?? "No description provided."}</p><div className="metadata"><span>{workflow.kind}</span><span>{workflow.source ?? "source unknown"}</span><span>{workflow.visualizable ? `${workflow.nodes.length} nodes` : "dynamic workflow"}</span></div>{workflow.visualizable ? <Graph workflow={workflow} /> : <div className="fallback"><h2>Dynamic workflow</h2><p>This workflow contains runtime control flow and cannot be represented as a fixed graph.</p><pre className="content">{JSON.stringify(workflow.raw, null, 2)}</pre></div>}</>}</DetailLayout>;
+  return <DetailLayout title={workflow?.name ?? name} eyebrow="Workflow definition" onBack={onBack} error={error}>{workflow && <><p className="lead">{workflow.description ?? "No description provided."}</p><div className="metadata"><span>{workflow.kind}</span><span>{workflow.source ?? "source unknown"}</span><span>{workflow.visualizable ? `${workflow.nodes.length} nodes` : "dynamic workflow"}</span></div>{workflow.visualizable ? <Graph workflow={workflow} profiles={profiles} /> : <div className="fallback"><h2>{workflow.reason ? "Not an executable workflow" : "Dynamic workflow"}</h2><p>{workflow.reason ?? "This workflow contains runtime control flow and cannot be represented as a fixed graph."}</p><details><summary>Inspect raw CAO definition</summary><pre className="content">{JSON.stringify(workflow.raw, null, 2)}</pre></details></div>}</>}</DetailLayout>;
 }
 
 function DetailLayout({ title, eyebrow, onBack, error, children }: { title: string; eyebrow: string; onBack: () => void; error?: string; children: React.ReactNode }) {
   return <><button className="back" onClick={onBack}>← Back</button><section className="detail"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1>{error && <div className="alert">{error}</div>}{children || (!error && <p className="muted">Loading…</p>)}</section></>;
 }
 
-function Graph({ workflow }: { workflow: Workflow }) {
+function Graph({ workflow, profiles }: { workflow: Workflow; profiles: ProfileSummary[] }) {
+  const descriptions = new Map(profiles.map((profile) => [profile.name, profile.description]));
+  for (const node of workflow.nodes) {
+    const description = node.profile ? descriptions.get(node.profile) : undefined;
+    if (description && !node.profile?.includes(": ")) node.profile = `${node.profile}: ${description}`;
+  }
   return <div className="graph">{workflow.nodes.map((node, index) => <div className="graph-step" key={node.id}><div className="node"><span className="node-kind">{node.kind ?? "step"}</span><strong>{node.label}</strong><small>{[node.profile, node.provider].filter(Boolean).join(" · ") || "agent details unavailable"}</small></div>{index < workflow.nodes.length - 1 && <div className="connector">↓</div>}</div>)}</div>;
 }
