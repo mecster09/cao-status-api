@@ -16,6 +16,9 @@ services:
     expose:
       - "3000"
 
+    ports:
+      - "31847:3000"
+
     networks:
       - net_agent
 
@@ -29,6 +32,9 @@ services:
 
     expose:
       - "80"
+
+    ports:
+      - "38421:80"
 
     networks:
       - net_agent
