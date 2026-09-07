@@ -95,6 +95,23 @@ test("a Python helper module explains that it is not an executable workflow", as
   });
 });
 
+test("workflow list hides shared Python helper modules", async () => {
+  const caoGet = async () => ([
+    {
+      name: "sdlc_common",
+      path: "sdlc_common.py",
+      source: "def agent_step(agent, prompt, step_id, wd):\n    return run_step(\"codex\", agent, prompt, step_id=step_id)"
+    },
+    { name: "sdlc_bootstrap", path: "sdlc_bootstrap.py", source: "agent_step(\"repo-setup-worker\", \"Set up\", \"setup\", wd)" }
+  ]);
+
+  await withServer(caoGet, async (baseUrl) => {
+    const list = await fetch(`${baseUrl}/api/cao/workflows`).then((response) => response.json());
+    assert.deepEqual(list.items.map((workflow: any) => workflow.name), ["sdlc_bootstrap"]);
+    assert.equal(list.total, 1);
+  });
+});
+
 test("Python workflow source produces best-effort visual steps", async () => {
   const caoGet = async () => ({
     name: "sdlc_common",

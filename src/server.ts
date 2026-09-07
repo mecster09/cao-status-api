@@ -108,19 +108,20 @@ export function createApp(caoGet: CaoClient = defaultCaoGet): Express {
     try {
       const raw = await caoGet("/workflows");
       const workflows = asArray(raw, ["workflows", "items", "results"]);
+      const items = workflows
+        .map((workflow) => normaliseWorkflow(workflow))
+        .filter((workflow) => workflow.reason !== "This Python file defines shared workflow helpers; it does not declare an executable workflow.")
+        .map((workflow) => ({
+          name: workflow.name,
+          description: workflow.description,
+          source: workflow.source,
+          inputs: workflow.inputs,
+          visualizable: workflow.visualizable,
+          kind: workflow.kind
+        }));
       res.json({
-        items: workflows.map((workflow) => {
-          const normalised = normaliseWorkflow(workflow);
-          return {
-            name: normalised.name,
-            description: normalised.description,
-            source: normalised.source,
-            inputs: normalised.inputs,
-            visualizable: normalised.visualizable,
-            kind: normalised.kind
-          };
-        }),
-        total: workflows.length
+        items,
+        total: items.length
       });
     } catch (error) {
       sendUpstreamError(res, error);
