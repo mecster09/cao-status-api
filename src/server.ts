@@ -20,7 +20,11 @@ async function defaultCaoGet(path: string): Promise<unknown> {
       signal: controller.signal,
       headers: { Accept: "application/json" }
     });
-    if (!response.ok) throw new Error(`CAO ${path} returned HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`CAO ${path} returned HTTP ${response.status}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
+    }
     return await response.json();
   } finally {
     clearTimeout(timer);
@@ -38,6 +42,27 @@ function sendUpstreamError(res: express.Response, error: unknown): void {
 
 export function createApp(caoGet: CaoClient = defaultCaoGet): Express {
   const app = express();
+  const allowedOrigins = new Set(
+    (process.env.CAO_ALLOWED_ORIGINS ?? "http://cao-app.homelab,http://cao-app.homelab:38421")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  );
+
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
@@ -92,7 +117,20 @@ export function createApp(caoGet: CaoClient = defaultCaoGet): Express {
 
   app.get("/api/cao/workflows/:name", async (req, res) => {
     try {
-      const raw = await caoGet(`/workflows/${encodeURIComponent(req.params.name)}`);
+      let raw: unknown;
+      try {
+        raw = await caoGet(`/workflows/${encodeURIComponent(req.params.name)}`);
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status !== 404) throw error;
+
+        const listRaw = await caoGet("/workflows");
+        const workflows = asArray(listRaw, ["workflows", "items", "results"]);
+        raw = workflows.find((workflow: any) =>
+          String(workflow.name ?? workflow.workflow_name ?? workflow.id) === req.params.name
+        );
+        if (!raw) throw error;
+      }
       res.json(normaliseWorkflow(raw));
     } catch (error) {
       sendUpstreamError(res, error);

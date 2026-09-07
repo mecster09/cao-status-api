@@ -1,4 +1,5 @@
-const apiBase = import.meta.env.VITE_API_BASE ?? "/cao-api";
+const apiBase = import.meta.env.VITE_API_BASE
+  ?? `${window.location.protocol}//${window.location.hostname}:31847`;
 
 export type ProfileSummary = {
   name?: string;

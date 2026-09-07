@@ -58,6 +58,20 @@ test("dynamic workflow detail remains inspectable without a false graph", async 
   });
 });
 
+test("workflow detail falls back to the matching workflow list item", async () => {
+  const caoGet = async (path: string) => {
+    if (path === "/workflows/fallback") throw Object.assign(new Error("not found"), { status: 404 });
+    return [{ name: "fallback", steps: [{ id: "only-step", label: "Only step" }] }];
+  };
+
+  await withServer(caoGet, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/cao/workflows/fallback`);
+    const detail = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(detail.nodes[0].id, "only-step");
+  });
+});
+
 test("CAO failure is exposed as a service-unavailable response", async () => {
   const caoGet = async () => { throw new Error("CAO unavailable"); };
 
