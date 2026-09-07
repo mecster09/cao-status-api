@@ -22,21 +22,87 @@ function workflowSteps(value: any): any[] {
   return asArray(workflow, ["steps", "nodes", "workflow_steps"]);
 }
 
+function splitArguments(argumentsText: string): string[] {
+  const argumentsList: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote = "";
+
+  for (let index = 0; index < argumentsText.length; index++) {
+    const character = argumentsText[index];
+    if (quote) {
+      if (character === "\\") index++;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === "(" || character === "[" || character === "{") depth++;
+    else if (character === ")" || character === "]" || character === "}") depth--;
+    else if (character === "," && depth === 0) {
+      argumentsList.push(argumentsText.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  argumentsList.push(argumentsText.slice(start).trim());
+  return argumentsList;
+}
+
+function stringLiteral(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = value.trim().match(/^(?:[furb]{0,2})(["'])([\s\S]*)\1$/i);
+  return match?.[2];
+}
+
+function scriptCalls(source: string): Array<{ name: string; argumentsText: string }> {
+  const calls: Array<{ name: string; argumentsText: string }> = [];
+  const callPattern = /\b(run_step|step|agent_step)\s*\(/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = callPattern.exec(source))) {
+    const openingParenthesis = source.indexOf("(", match.index);
+    let depth = 0;
+    let quote = "";
+    let end = -1;
+    for (let index = openingParenthesis; index < source.length; index++) {
+      const character = source[index];
+      if (quote) {
+        if (character === "\\") index++;
+        else if (character === quote) quote = "";
+        continue;
+      }
+      if (character === '"' || character === "'") quote = character;
+      else if (character === "(") depth++;
+      else if (character === ")" && --depth === 0) {
+        end = index;
+        break;
+      }
+    }
+    if (end === -1) continue;
+    calls.push({ name: match[1], argumentsText: source.slice(openingParenthesis + 1, end) });
+    callPattern.lastIndex = end + 1;
+  }
+  return calls;
+}
+
 function scriptSteps(source: unknown): any[] {
   if (typeof source !== "string") return [];
   const nodes: any[] = [];
-  const callPattern = /(?:run_step|step)\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']/g;
-  let match: RegExpExecArray | null;
-  while ((match = callPattern.exec(source))) {
-    const callEnd = source.indexOf(")", match.index);
-    const call = source.slice(match.index, callEnd === -1 ? source.length : callEnd);
-    const stepId = call.match(/step_id\s*=\s*["']([^"']+)["']/)?.[1];
+
+  for (const call of scriptCalls(source)) {
+    const argumentsList = splitArguments(call.argumentsText);
+    const isHelper = call.name === "agent_step";
+    const provider = isHelper ? undefined : stringLiteral(argumentsList[0]);
+    const profile = stringLiteral(argumentsList[isHelper ? 0 : 1]);
+    const positionalStepId = isHelper ? stringLiteral(argumentsList[2]) : undefined;
+    const keywordStepId = call.argumentsText.match(/\bstep_id\s*=\s*(?:[furb]{0,2})(["'])([\s\S]*?)\1/i)?.[2];
+    if (!profile) continue;
+    const stepId = keywordStepId ?? positionalStepId;
     nodes.push({
       id: stepId ?? `step-${nodes.length + 1}`,
-      label: stepId ?? match[2],
+      label: stepId ?? profile,
       kind: "agent-step",
-      profile: match[2],
-      provider: match[1]
+      profile,
+      provider
     });
   }
   return nodes;
@@ -103,7 +169,9 @@ export function normaliseWorkflow(value: any): any {
   return {
     name: workflow?.name ?? workflow?.workflow_name ?? workflow?.id,
     description: workflow?.description,
-    source: workflow?.source ?? workflow?.path ?? workflow?.filename,
+    // ScriptSpec's `source` is the complete Python file. The viewer's source
+    // metadata should be a concise location, not several pages of code.
+    source: workflow?.path ?? workflow?.filename ?? workflow?.source,
     inputs: workflow?.inputs ?? workflow?.INPUTS ?? [],
     validation: workflow?.validation ?? workflow?.status,
     ...workflowGraph(value),

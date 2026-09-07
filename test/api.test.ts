@@ -66,14 +66,52 @@ test("Python workflow source produces best-effort visual steps", async () => {
       "from cao_workflow import run_step",
       "run_step(\"codex\", \"developer\", \"Implement the change\", step_id=\"implement\")",
       "run_step(\"claude_code\", \"reviewer\", \"Review the change\", step_id=\"review\")"
-    ].join("\\n")
+    ].join("\n")
   });
 
   await withServer(caoGet, async (baseUrl) => {
     const detail = await fetch(`${baseUrl}/api/cao/workflows/sdlc_common`).then((response) => response.json());
     assert.equal(detail.visualizable, true);
+    assert.equal(detail.source, "sdlc_common.py");
     assert.deepEqual(detail.nodes.map((node: any) => node.id), ["implement", "review"]);
     assert.deepEqual(detail.edges, [{ from: "implement", to: "review" }]);
+  });
+});
+
+test("Python workflow preserves step IDs after nested prompt expressions", async () => {
+  const caoGet = async () => ({
+    name: "engineering_flow",
+    path: "engineering_flow.py",
+    source: [
+      "run_step(\"codex\", \"requirements-analyst\", \"Gather requirements\", step_id=\"requirements\")",
+      "run_step(\"codex\", \"spec-reviewer\", (",
+      "  f\"Review {tickets}\"",
+      "), step_id=\"final-review\")"
+    ].join("\n")
+  });
+
+  await withServer(caoGet, async (baseUrl) => {
+    const detail = await fetch(`${baseUrl}/api/cao/workflows/engineering_flow`).then((response) => response.json());
+    assert.deepEqual(detail.nodes.map((node: any) => node.id), ["requirements", "final-review"]);
+  });
+});
+
+test("Python workflow recognises CAO agent_step helper calls", async () => {
+  const caoGet = async () => ({
+    name: "sdlc_bootstrap",
+    path: "sdlc_bootstrap.py",
+    source: [
+      "from sdlc_common import agent_step",
+      "agent_step(\"change-publisher\", f\"Publish {issue}\", \"publish-bootstrap\", wt, model)",
+      "agent_step(\"repo-setup-worker\", \"Set up the repository\", \"setup\", wt, model)"
+    ].join("\n")
+  });
+
+  await withServer(caoGet, async (baseUrl) => {
+    const detail = await fetch(`${baseUrl}/api/cao/workflows/sdlc_bootstrap`).then((response) => response.json());
+    assert.equal(detail.visualizable, true);
+    assert.deepEqual(detail.nodes.map((node: any) => node.id), ["publish-bootstrap", "setup"]);
+    assert.deepEqual(detail.nodes.map((node: any) => node.profile), ["change-publisher", "repo-setup-worker"]);
   });
 });
 
