@@ -91,6 +91,7 @@ test("a Python helper module explains that it is not an executable workflow", as
   await withServer(caoGet, async (baseUrl) => {
     const detail = await fetch(`${baseUrl}/api/cao/workflows/sdlc_common`).then((response) => response.json());
     assert.equal(detail.visualizable, false);
+    assert.equal(detail.hidden, true);
     assert.equal(detail.reason, "This Python file defines shared workflow helpers; it does not declare an executable workflow.");
   });
 });

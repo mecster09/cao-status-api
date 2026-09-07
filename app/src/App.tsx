@@ -73,6 +73,8 @@ function WorkflowPage({ name, profiles, onBack }: { name: string; profiles: Prof
   const [workflow, setWorkflow] = useState<Workflow>();
   const [error, setError] = useState<string>();
   useEffect(() => { api.workflow(name).then(setWorkflow).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load workflow")); }, [name]);
+  useEffect(() => { if (workflow?.hidden) onBack(); }, [workflow?.hidden]);
+  if (workflow?.hidden) return null;
   return <DetailLayout title={workflow?.name ?? name} eyebrow="Workflow definition" onBack={onBack} error={error}>{workflow && <><p className="lead">{workflow.description ?? "No description provided."}</p><div className="metadata"><span>{workflow.kind}</span><span>{workflow.source ?? "source unknown"}</span><span>{workflow.visualizable ? `${workflow.nodes.length} nodes` : "dynamic workflow"}</span></div>{workflow.visualizable ? <Graph workflow={workflow} profiles={profiles} /> : <div className="fallback"><h2>{workflow.reason ? "Not an executable workflow" : "Dynamic workflow"}</h2><p>{workflow.reason ?? "This workflow contains runtime control flow and cannot be represented as a fixed graph."}</p><details><summary>Inspect raw CAO definition</summary><pre className="content">{JSON.stringify(workflow.raw, null, 2)}</pre></details></div>}</>}</DetailLayout>;
 }
 

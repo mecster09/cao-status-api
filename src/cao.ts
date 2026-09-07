@@ -183,6 +183,7 @@ export function workflowGraph(value: any): {
 
 export function normaliseWorkflow(value: any): any {
   const workflow = unwrapWorkflow(value);
+  const graph = workflowGraph(value);
   return {
     name: workflow?.name ?? workflow?.workflow_name ?? workflow?.id,
     description: workflow?.description,
@@ -191,7 +192,8 @@ export function normaliseWorkflow(value: any): any {
     source: workflow?.path ?? workflow?.filename ?? workflow?.source,
     inputs: workflow?.inputs ?? workflow?.INPUTS ?? [],
     validation: workflow?.validation ?? workflow?.status,
-    ...workflowGraph(value),
+    ...graph,
+    hidden: graph.reason === "This Python file defines shared workflow helpers; it does not declare an executable workflow.",
     raw: value
   };
 }

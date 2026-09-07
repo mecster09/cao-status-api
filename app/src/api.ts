@@ -31,6 +31,7 @@ export type Workflow = {
   visualizable: boolean;
   kind: "graph" | "dynamic" | "unknown";
   reason?: string;
+  hidden?: boolean;
   raw?: unknown;
 };
 
